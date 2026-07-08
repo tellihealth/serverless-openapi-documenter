@@ -94,12 +94,13 @@ class OWASP {
     const headerJSON = await new Promise((resolve, reject) => {
       const req = https
         .get(
-          "https://owasp.org/www-project-secure-headers/ci/headers_add.json",
+          "https://raw.githubusercontent.com/OWASP/www-project-secure-headers/master/ci/headers_add.json",
           (res) => {
             let data = [];
 
             if (res.statusCode !== 200) {
               resolve(defaultOWASP);
+              return;
             }
 
             res.on("error", (err) => {
@@ -111,7 +112,11 @@ class OWASP {
             });
 
             res.on("end", () => {
-              resolve(JSON.parse(Buffer.concat(data).toString()));
+              try {
+                resolve(JSON.parse(Buffer.concat(data).toString()));
+              } catch (err) {
+                resolve(defaultOWASP);
+              }
             });
           }
         )
