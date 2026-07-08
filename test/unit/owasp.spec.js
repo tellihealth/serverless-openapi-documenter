@@ -11,9 +11,11 @@ const newOWASPJSON = require("../json/newOWASP.json");
 describe(`owasp`, function () {
   describe(`getLatest`, function () {
     it(`populates the defaults from the included OWASP release when the online version can not be reached`, async function () {
-      nock("https://owasp.org")
-        .get("/www-project-secure-headers/ci/headers_add.json")
-        .reply(404, {});
+      // Real 404s from the host return an HTML body, not JSON — this reproduces
+      // the crash where JSON.parse() on the HTML threw an uncaught SyntaxError.
+      nock("https://raw.githubusercontent.com")
+        .get("/OWASP/www-project-secure-headers/master/ci/headers_add.json")
+        .reply(404, "<!DOCTYPE html><html><head><title>404</title></head></html>");
 
       await owasp.getLatest().catch((err) => {
         console.error(err);
@@ -32,9 +34,25 @@ describe(`owasp`, function () {
       expect(Object.keys(owasp.DEFAULT_OWASP_HEADERS).length).to.be.equal(13);
     });
 
+    it(`falls back to the included defaults when the online version returns a non-JSON body`, async function () {
+      nock("https://raw.githubusercontent.com")
+        .get("/OWASP/www-project-secure-headers/master/ci/headers_add.json")
+        .reply(200, "<!DOCTYPE html><html><body>not json</body></html>");
+
+      await owasp.getLatest().catch((err) => {
+        console.error(err);
+        expect(err).to.be.undefined;
+      });
+
+      expect(
+        owasp.DEFAULT_OWASP_HEADERS["Permissions-Policy"]
+      ).to.have.property("schema");
+      expect(Object.keys(owasp.DEFAULT_OWASP_HEADERS).length).to.be.equal(13);
+    });
+
     it(`populates the defaults with information from a new OWASP release`, async function () {
-      nock("https://owasp.org")
-        .get("/www-project-secure-headers/ci/headers_add.json")
+      nock("https://raw.githubusercontent.com")
+        .get("/OWASP/www-project-secure-headers/master/ci/headers_add.json")
         .reply(200, newOWASPJSON);
 
       await owasp.getLatest().catch((err) => {
@@ -63,8 +81,8 @@ describe(`owasp`, function () {
       const newOWASPJSONAdded = structuredClone(newOWASPJSON);
       newOWASPJSONAdded.headers.push({ name: "x-added", value: "true" });
 
-      nock("https://owasp.org")
-        .get("/www-project-secure-headers/ci/headers_add.json")
+      nock("https://raw.githubusercontent.com")
+        .get("/OWASP/www-project-secure-headers/master/ci/headers_add.json")
         .reply(200, newOWASPJSONAdded);
 
       await owasp.getLatest().catch((err) => {
